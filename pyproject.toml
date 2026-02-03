@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "natalchartbot"
+version = "0.1.0"
+description = ""
+authors = ["Bulat Nasyrov <bulatnasirov2003@gmail.com>"]
+license = "Apache License"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+pytelegrambotapi = "^4.30.0"
+pyswisseph = "^2.10.3.2"
+geopy = "^2.4.1"
+python-dotenv = "^1.2.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

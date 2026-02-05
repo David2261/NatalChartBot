@@ -56,6 +56,40 @@ def _group_planets_by_house(positions: dict, cusps: list) -> dict:
 	return planets_by_house
 
 
+def _draw_background_first_page(canvas, doc):
+    canvas.saveState()
+
+    page_width, page_height = A4
+
+    canvas.drawImage(
+        os.path.join(os.path.dirname(__file__), 'assets', 'main_template.png'),
+        0,
+        0,
+        width=page_width,
+        height=page_height,
+        preserveAspectRatio=True,
+        mask="auto"
+    )
+
+    canvas.restoreState()
+
+
+def _draw_background_other_pages(canvas, doc):
+    canvas.saveState()
+
+    w, h = A4
+    canvas.drawImage(
+        os.path.join(os.path.dirname(__file__), 'assets', 'template_standart.png'),
+        0, 0,
+        width=w,
+        height=h,
+        preserveAspectRatio=True,
+        mask="auto"
+    )
+
+    canvas.restoreState()
+
+
 def create_natal_pdf(chart, uid, user_first_name, bot_username):
 	"""
 	Создаёт PDF с полным натальным разбором.
@@ -63,7 +97,7 @@ def create_natal_pdf(chart, uid, user_first_name, bot_username):
 	Возвращает путь к файлу или поднимает исключение при ошибке.
 	"""
 	os.makedirs(TEMP_DIR, exist_ok=True)
-	
+
 	timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 	pdf_filename = f"natal_chart_{uid}_{timestamp}.pdf"
 	pdf_path = os.path.join(TEMP_DIR, pdf_filename)
@@ -71,10 +105,10 @@ def create_natal_pdf(chart, uid, user_first_name, bot_username):
 	doc = SimpleDocTemplate(
 		pdf_path,
 		pagesize=A4,
-		rightMargin=15*mm,
-		leftMargin=15*mm,
-		topMargin=20*mm,
-		bottomMargin=20*mm
+		rightMargin=10*mm,
+		leftMargin=20*mm,
+		topMargin=10*mm,
+		bottomMargin=10*mm,
 	)
 
 	styles = getSampleStyleSheet()
@@ -83,7 +117,7 @@ def create_natal_pdf(chart, uid, user_first_name, bot_username):
 		name='Title',
 		fontName='DejaVuBold',
 		fontSize=28,
-		textColor=colors.HexColor('#1E3A8A'),
+		textColor=colors.white,
 		spaceAfter=18,
 		alignment=1,
 		leading=34
@@ -93,7 +127,7 @@ def create_natal_pdf(chart, uid, user_first_name, bot_username):
 		name='Subtitle',
 		fontName='DejaVu',
 		fontSize=16,
-		textColor=colors.HexColor('#6D28D9'),
+		textColor=colors.white,
 		spaceAfter=12,
 		alignment=1
 	)
@@ -102,7 +136,7 @@ def create_natal_pdf(chart, uid, user_first_name, bot_username):
 		name='Section',
 		fontName='DejaVuBold',
 		fontSize=16,
-		textColor=colors.HexColor('#1E3A8A'),
+		textColor=colors.white,
 		spaceBefore=24,
 		spaceAfter=12
 	)
@@ -112,6 +146,7 @@ def create_natal_pdf(chart, uid, user_first_name, bot_username):
 		fontName='DejaVu',
 		fontSize=11,
 		leading=14,
+		textColor=colors.white,
 		spaceAfter=8
 	)
 
@@ -119,7 +154,7 @@ def create_natal_pdf(chart, uid, user_first_name, bot_username):
 		name='Small',
 		fontName='DejaVu',
 		fontSize=9,
-		textColor=colors.grey,
+		textColor=colors.white,
 		alignment=1,
 		spaceBefore=30
 	)
@@ -133,16 +168,6 @@ def create_natal_pdf(chart, uid, user_first_name, bot_username):
 	cusps = chart['cusps']
 	aspects = chart.get('aspects', [])
 
-	# Обложка
-	story.append(Spacer(1, 40*mm))
-
-	logo_path = os.path.join(os.path.dirname(__file__), '..', 'bot_logo.png')
-	if os.path.exists(logo_path):
-		try:
-			story.append(Image(logo_path, width=60*mm, height=60*mm, kind='proportional'))
-			story.append(Spacer(1, 10*mm))
-		except:
-			pass
 
 	story.append(Paragraph("Полный натальный разбор", title_style))
 	story.append(Spacer(1, 6*mm))
@@ -235,7 +260,7 @@ def create_natal_pdf(chart, uid, user_first_name, bot_username):
 		# Сортируем аспекты по важности и орбу
 		sorted_aspects = _sort_aspects(aspects)
 		
-		for i, asp in enumerate(sorted_aspects[:7], 1):
+		for i, asp in enumerate(sorted_aspects, 1):
 			p1, p2 = asp['p1'], asp['p2']
 			typ = ASPECT_NAMES_RU.get(asp['type'], asp['type'])
 			orb = asp['orb']
@@ -323,5 +348,9 @@ def create_natal_pdf(chart, uid, user_first_name, bot_username):
 	)))
 
 	# Сборка
-	doc.build(story)
+	doc.build(
+		story,
+		onFirstPage=_draw_background_first_page,
+		onLaterPages=_draw_background_other_pages
+	)
 	return pdf_path

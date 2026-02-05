@@ -84,7 +84,7 @@ def handle_place(m):
 def handle_buy_full(call):
 	uid = call.from_user.id
 	chat_id = call.message.chat.id
-	user_first_name = call.from_user.first_name or "Пользователь"
+	user_first_name = call.from_user.first_name or ""
 
 	if is_paid(uid):
 		bot.answer_callback_query(call.id, "Вы уже оплатили полный разбор", show_alert=True)
@@ -158,7 +158,7 @@ def send_full_result(bot, chat_id, uid=None):
 	# Генерируем и отправляем PDF
 	try:
 		# Получаем необходимые параметры
-		user_first_name = data.get('user_first_name', 'Пользователь')
+		user_first_name = data.get('user_first_name', '')
 		
 		try:
 			bot_info = bot.get_me()
@@ -197,7 +197,7 @@ def send_full_result(bot, chat_id, uid=None):
 def successful_payment_handler(message):
 	uid = message.from_user.id
 	chat_id = message.chat.id
-	user_first_name = message.from_user.first_name or "Пользователь"
+	user_first_name = message.from_user.first_name or ""
 
 	set_paid(uid, message.successful_payment.telegram_payment_charge_id)
 

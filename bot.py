@@ -1,10 +1,13 @@
 import datetime
 import os
+import threading
+import time
 from admin import admin_only
 from dotenv import load_dotenv
 from pdf_generator import create_natal_pdf
 import telebot
 from telebot.types import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
+import telebot.apihelper as apihelper
 from states import is_paid, set_paid, set_state, get_state, get_data, user_states
 from calculator import calculate_full_chart
 from texts import generate_free_interpretation
@@ -14,7 +17,50 @@ load_dotenv()
 
 TOKEN = os.getenv("TOKEN")
 
+apihelper.API_TIMEOUT = 360
+apihelper.RETRY_ON_ERROR = True
+apihelper.RETRY_DELAY = 2
+apihelper.MAX_RETRIES = 5
+
 bot = telebot.TeleBot(TOKEN)
+
+
+def _generate_and_send_pdf(bot, chat_id, uid, chart, user_first_name, bot_username):
+	pdf_path = None
+	try:
+		pdf_path = create_natal_pdf(
+			chart,
+			uid,
+			user_first_name,
+			bot_username
+		)
+
+		for attempt in range(1, 4):
+			try:
+				with open(pdf_path, "rb") as f:
+					bot.send_document(
+						chat_id,
+						f,
+						caption="Ваш полный натальный разбор в PDF\nСкачайте и сохраните ❤️",
+						timeout=90 + attempt * 30
+					)
+				break
+
+			except Exception as e:
+				if attempt == 3:
+					raise
+				bot.send_message(chat_id, f"Попытка {attempt} не удалась, пробую ещё раз...")
+				time.sleep(3)
+
+	except Exception as e:
+		bot.send_message(
+			chat_id,
+			f"❌ Ошибка при отправке PDF:\n{e}"
+		)
+
+	finally:
+		if pdf_path and os.path.exists(pdf_path):
+			os.remove(pdf_path)
 
 
 @bot.message_handler(commands=['start'])
@@ -124,12 +170,7 @@ def pre_checkout_handler(pre_checkout_query):
 
 def send_full_result(bot, chat_id, uid=None):
 	"""
-	Отправляет полный натальный разбор пользователю в виде PDF.
-	
-	Аргументы:
-		bot: экземпляр telebot.TeleBot
-		chat_id: ID чата (обычно message.chat.id)
-		uid: ID пользователя (message.from_user.id). Если None — берётся из chat_id (для личных чатов)
+	Отправляет полный натальный разбор пользователю в виде PDF (без таймаутов).
 	"""
 	if uid is None:
 		uid = chat_id
@@ -143,54 +184,36 @@ def send_full_result(bot, chat_id, uid=None):
 		)
 		return
 
-	# Получаем сохранённые данные
 	data = get_data(uid)
-	chart = data.get('chart')
+	chart = data.get("chart")
 
 	if not chart:
 		bot.send_message(
 			chat_id,
 			"⚠️ Натальная карта не найдена.\n"
-			"Пожалуйста, рассчитайте карту заново: /start → «Рассчитать натальную карту»"
+			"Пожалуйста, рассчитайте карту заново."
 		)
 		return
 
-	# Генерируем и отправляем PDF
-	try:
-		# Получаем необходимые параметры
-		user_first_name = data.get('user_first_name', '')
-		
-		try:
-			bot_info = bot.get_me()
-			bot_username = bot_info.username or "natal_chart_bot"
-		except:
-			bot_username = "natal_chart_bot"
-		
-		# Генерируем PDF
-		pdf_path = create_natal_pdf(chart, uid, user_first_name, bot_username)
-		
-		# Отправляем PDF
-		with open(pdf_path, 'rb') as pdf_file:
-			bot.send_document(
-				chat_id,
-				pdf_file,
-				caption="Ваш полный натальный разбор в PDF\nСкачайте и сохраните ❤️"
-			)
-		
-		# Удаляем временный файл
-		os.remove(pdf_path)
-		
-		# Предложение рассчитать ещё
-		markup = InlineKeyboardMarkup()
-		markup.add(InlineKeyboardButton("Рассчитать новую карту", callback_data="new_calc"))
-		bot.send_message(chat_id, "Хотите рассчитать карту для другого человека?", reply_markup=markup)
+	user_first_name = data.get("user_first_name", "")
 
-	except Exception as e:
-		bot.send_message(
-			chat_id,
-			f"❌ Ошибка при формировании полного разбора: {str(e)}\n"
-			"Пожалуйста, попробуйте позже или напишите @support."
-		)
+	try:
+		bot_info = bot.get_me()
+		bot_username = bot_info.username or "natal_chart_bot"
+	except Exception:
+		bot_username = "natal_chart_bot"
+
+	bot.send_message(
+		chat_id,
+		"⏳ Формирую ваш полный натальный разбор.\n"
+		"Это займет около 1–2 минут."
+	)
+
+	threading.Thread(
+		target=_generate_and_send_pdf,
+		args=(bot, chat_id, uid, chart, user_first_name, bot_username),
+		daemon=True
+	).start()
 
 
 @bot.message_handler(content_types=['successful_payment'])
@@ -247,7 +270,7 @@ def successful_payment_handler(message):
 				filename=f"natal_chart_{user_first_name}.pdf"
 			)
 
-		os.remove(pdf_path)  # чистим за собой
+		os.remove(pdf_path)
 
 	except Exception as e:
 		bot.send_message(chat_id, f"Ошибка при создании PDF: {str(e)}\nНапишите администратору.")
@@ -255,14 +278,12 @@ def successful_payment_handler(message):
 	set_state(uid, "START")
 
 
-# Admin command to broadcast a message to all paid users
 @bot.message_handler(commands=['admin', 'stats'])
 @admin_only
 def admin_stats(message):
 	uid = message.from_user.id
 	text = f"Статистика на {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n"
 	
-	# если есть user_states
 	active_users = len([uid for uid in user_states if get_state(uid) != 'START'])
 	paid_users = sum(1 for uid in user_states if is_paid(uid))
 	
@@ -275,7 +296,6 @@ def admin_stats(message):
 @bot.message_handler(commands=['broadcast'])
 @admin_only
 def broadcast(message):
-	# очень простой вариант — текст после команды
 	text = message.text.split(maxsplit=1)[1] if len(message.text.split()) > 1 else None
 	if not text:
 		bot.reply_to(message, "Напишите: /broadcast Ваш текст для рассылки")
@@ -287,9 +307,37 @@ def broadcast(message):
 			bot.send_message(uid, text)
 			sent += 1
 		except:
-			pass  # пользователь заблокировал бота или удалил чат
+			pass
 	
 	bot.reply_to(message, f"Рассылка завершена. Отправлено: {sent}")
+
+@bot.message_handler(commands=['info', 'информация', 'помощь', 'help'])
+def bot_info(message):
+    uid = message.from_user.id
+    text = (
+        "🌟 <b>Натальный чарт-бот</b> 🌟\n\n"
+        "Я помогаю рассчитать твою натальную карту и понять, как звёзды влияют на твою жизнь.\n\n"
+        "<b>Что умеет бот:</b>\n"
+        "• Бесплатно рассчитывает натальную карту по дате, времени и месту рождения\n"
+        "• Даёт краткую бесплатную интерпретацию (аспекты, планеты в домах, стихии)\n"
+        "• Предлагает купить <b>полный профессиональный разбор</b> в PDF (100 ★)\n"
+        "  → 8-10 страниц детального текста\n"
+        "  → Совместимость, прогрессии, синастрия (по запросу), рекомендации\n\n"
+        "<b>Как пользоваться:</b>\n"
+        "1. Нажми «Рассчитать натальную карту»\n"
+        "2. Введи дату → время → место рождения\n"
+        "3. Получи бесплатный обзор\n"
+        "4. Если захочешь глубже — купи полный разбор за 100 Telegram Stars\n\n"
+        "Все данные хранятся только до конца сессии или до /start\n\n"
+        "Приятного исследования себя! ✨"
+    )
+    
+    bot.send_message(
+        message.chat.id,
+        text,
+        parse_mode='HTML',
+        disable_web_page_preview=True
+    )
 
 
 @bot.message_handler(commands=['testpay'])

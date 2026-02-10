@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, PageBreak
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, PageBreak, KeepTogether
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm, cm
 from reportlab.lib import colors
@@ -9,7 +9,9 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
 from calculator import deg_to_sign
+from mc_loader import get_mc_interpretation
 from texts import ASPECT_NAMES_RU, PLANET_EMOJI, get_ascendant_interpretation, get_aspect_interpretation, get_house, get_planet_interpretation, get_sign_name
+from love_ai import get_all_sections
 
 FONTS_DIR = os.path.join(os.path.dirname(__file__), 'fonts')
 TEMP_DIR = os.path.join(os.path.dirname(__file__), 'temp')
@@ -57,37 +59,37 @@ def _group_planets_by_house(positions: dict, cusps: list) -> dict:
 
 
 def _draw_background_first_page(canvas, doc):
-    canvas.saveState()
+	canvas.saveState()
 
-    page_width, page_height = A4
+	page_width, page_height = A4
 
-    canvas.drawImage(
-        os.path.join(os.path.dirname(__file__), 'assets', 'main_template.png'),
-        0,
-        0,
-        width=page_width,
-        height=page_height,
-        preserveAspectRatio=True,
-        mask="auto"
-    )
+	canvas.drawImage(
+		os.path.join(os.path.dirname(__file__), 'assets', 'main_template.png'),
+		0,
+		0,
+		width=page_width,
+		height=page_height,
+		preserveAspectRatio=True,
+		mask="auto"
+	)
 
-    canvas.restoreState()
+	canvas.restoreState()
 
 
 def _draw_background_other_pages(canvas, doc):
-    canvas.saveState()
+	canvas.saveState()
 
-    w, h = A4
-    canvas.drawImage(
-        os.path.join(os.path.dirname(__file__), 'assets', 'template_standart.png'),
-        0, 0,
-        width=w,
-        height=h,
-        preserveAspectRatio=True,
-        mask="auto"
-    )
+	w, h = A4
+	canvas.drawImage(
+		os.path.join(os.path.dirname(__file__), 'assets', 'template_standart.png'),
+		0, 0,
+		width=w,
+		height=h,
+		preserveAspectRatio=True,
+		mask="auto"
+	)
 
-    canvas.restoreState()
+	canvas.restoreState()
 
 
 def create_natal_pdf(chart, uid, user_first_name, bot_username):
@@ -209,27 +211,31 @@ def create_natal_pdf(chart, uid, user_first_name, bot_username):
 			story.append(Spacer(1, 0.1*cm))
 			
 			# Планеты в этом доме
-			for planet in planets_in_house:
-				deg = pos[planet]
-				sign_name = get_sign_name(deg)
-				sign_full = deg_to_sign(deg)
-				emoji = PLANET_EMOJI.get(planet, '★')
-				
-				# Заголовок планеты
-				planet_header = f"{emoji} <b>{planet}</b> в {sign_full}"
-				story.append(Paragraph(planet_header, ParagraphStyle(
-					'PlanetHeader',
-					parent=body_style,
-					fontName='DejaVuBold',
-					fontSize=11
-				)))
-				
-				# Интерпретация планеты
-				planet_text = get_planet_interpretation(planet, sign_name)
-				if planet_text:
-					story.append(Paragraph(planet_text, body_style))
-				
-				story.append(Spacer(1, 0.15*cm))
+			if planets_in_house:
+				for planet in planets_in_house:
+					deg = pos[planet]
+					sign_name = get_sign_name(deg)
+					sign_full = deg_to_sign(deg)
+					emoji = PLANET_EMOJI.get(planet, '★')
+					
+					# Заголовок планеты
+					planet_header = f"{emoji} <b>{planet}</b> в {sign_full}"
+					story.append(Paragraph(planet_header, ParagraphStyle(
+						'PlanetHeader',
+						parent=body_style,
+						fontName='DejaVuBold',
+						fontSize=11
+					)))
+					
+					# Интерпретация планеты
+					planet_text = get_planet_interpretation(planet, sign_name)
+					if planet_text:
+						story.append(Paragraph(planet_text, body_style))
+					
+					story.append(Spacer(1, 0.15*cm))
+			else:
+				story.append(Paragraph("Пустой дом — акцент на самостоятельном развитии этой сферы жизни", body_style))
+				story.append(Spacer(1, 0.2*cm))
 
 	# Асцендент
 	asc_sign_name = get_sign_name(asc)
@@ -248,7 +254,10 @@ def create_natal_pdf(chart, uid, user_first_name, bot_username):
 		story.append(Paragraph(asc_text, body_style))
 	
 	story.append(Spacer(1, 0.3*cm))
-	story.append(Paragraph(f"☊ <b>Середина Неба (MC)</b>: {deg_to_sign(mc)}", body_style))
+	mc_sign_ru = deg_to_sign(mc).split("° ")[-1].strip()
+	mc_text = get_mc_interpretation(mc_sign_ru)
+	story.append(Paragraph(f"<b>Середина Неба (MC)</b>: {deg_to_sign(mc)}", section_style))
+	story.append(Paragraph(mc_text, body_style))
 
 	story.append(PageBreak())
 
@@ -278,53 +287,37 @@ def create_natal_pdf(chart, uid, user_first_name, bot_username):
 	story.append(Paragraph("💕 Любовь, секс и партнёрство", section_style))
 	story.append(Spacer(1, 4*mm))
 
-	if 'Venus' in pos and 'Moon' in pos:
-		venus_house = get_house(cusps, pos['Venus'])
-		moon_house = get_house(cusps, pos['Moon'])
-		story.append(Paragraph(
-			f"Ваша Венера в {venus_house}-м доме показывает, каких людей вы привлекаете. "
-			f"Луна в {moon_house}-м доме добавляет эмоциональный фон. "
-			"Сейчас важно учиться балансу между «хочу» и «могу дать».",
-			body_style
-		))
+	sections = get_all_sections(chart)
+	story.append(KeepTogether([
+		Paragraph(sections["love"], body_style)
+	]))
 
 	story.append(PageBreak())
 
 	# Деньги и самореализация
 	story.append(Paragraph("💰 Деньги и самореализация", section_style))
 	story.append(Spacer(1, 4*mm))
-
-	tenth_planets = planets_by_house.get(10, [])
-	if tenth_planets:
-		story.append(Paragraph(
-			f"Скопление в 10-м доме ({', '.join(tenth_planets)}) указывает на большой потенциал в карьере. "
-			"Вы можете достигать стабильности через упорство и правильный выбор направления.",
-			body_style
-		))
-	else:
-		story.append(Paragraph("10-й дом и его управитель указывают на ваш профессиональный путь.", body_style))
+	story.append(KeepTogether([
+		Paragraph(sections["money"], body_style)
+	]))
 
 	story.append(PageBreak())
 
 	# Теневые стороны
 	story.append(Paragraph("⚫ Теневые стороны и блоки", section_style))
 	story.append(Spacer(1, 4*mm))
-	story.append(Paragraph(
-		"Перфекционизм, страх потери контроля, внутренний бунт vs. желание стабильности. "
-		"Проработка: принятие несовершенства, работа с гневом и доверием.",
-		body_style
-	))
+	story.append(KeepTogether([
+		Paragraph(sections["shadow"], body_style)
+	]))
 
 	story.append(PageBreak())
 
 	# Главная задача
 	story.append(Paragraph("🎯 Главная жизненная задача", section_style))
 	story.append(Spacer(1, 4*mm))
-	story.append(Paragraph(
-		"Развить уверенность в своей уникальности, сочетать аналитический ум с интуицией. "
-		"Менять мир через точечную, глубокую помощь другим.",
-		body_style
-	))
+	story.append(KeepTogether([
+		Paragraph(sections["task"], body_style)
+	]))
 
 	story.append(Spacer(1, 30*mm))
 
@@ -354,3 +347,40 @@ def create_natal_pdf(chart, uid, user_first_name, bot_username):
 		onLaterPages=_draw_background_other_pages
 	)
 	return pdf_path
+
+
+if __name__ == "__main__":
+	# Пример тестового запуска (можно удалить или закомментировать в продакшене)
+	print("Это тестовый запуск генератора PDF натальной карты")
+	print("Для реального использования вызывайте функцию create_natal_pdf(...)")
+	
+	# Пример минимального тестового словаря chart (можно убрать)
+	test_chart = {
+		'positions': {
+			'Sun': 125.4,
+			'Moon': 278.9,
+			'Mercury': 112.7,
+			'Venus': 145.2,
+			'Mars': 33.1,
+		},
+		'asc': 87.3,
+		'mc': 195.6,
+		'cusps': [85.0, 115.0, 145.0, 175.0, 205.0, 235.0,
+				  265.0, 295.0, 325.0, 355.0, 25.0, 55.0],
+		'aspects': [
+			{'p1': 'Sun', 'p2': 'Moon', 'type': 'opp', 'orb': 2.3},
+			{'p1': 'Venus', 'p2': 'Mars', 'type': 'trine', 'orb': 1.1},
+		]
+	}
+	
+	try:
+		pdf_file = create_natal_pdf(
+			chart=test_chart,
+			uid="test_user_123",
+			user_first_name="Тестовый Пользователь",
+			bot_username="@AstroTestBot"
+		)
+		print(f"PDF успешно создан: {pdf_file}")
+	except Exception as e:
+		print("Ошибка при создании PDF:")
+		print(e)

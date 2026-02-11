@@ -5,7 +5,7 @@ CONTENT_DIR = os.path.join(os.path.dirname(__file__), "source")
 
 # Эмодзи планет
 PLANET_EMOJI = {
-	'Sun': '🌞', 'Moon': '🌙', 'Mercury': '☿', 'Venus': '♀', 'Mars': '♂',
+	'Sun': '☉', 'Moon': '☽', 'Mercury': '☿', 'Venus': '♀', 'Mars': '♂',
 	'Jupiter': '♃', 'Saturn': '♄', 'Uranus': '♅', 'Neptune': '♆', 'Pluto': '♇'
 }
 

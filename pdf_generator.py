@@ -170,19 +170,11 @@ def create_natal_pdf(chart, uid, user_first_name, bot_username):
 	cusps = chart['cusps']
 	aspects = chart.get('aspects', [])
 
-
+	story.append(Spacer(1, 30*mm))
 	story.append(Paragraph("Полный натальный разбор", title_style))
 	story.append(Spacer(1, 6*mm))
 	story.append(Paragraph("Ваша натальная карта", subtitle_style))
-	story.append(Spacer(1, 20*mm))
-
-	story.append(Paragraph(f"<b>{user_first_name}</b>", ParagraphStyle(
-		name='Name',
-		parent=body_style,
-		fontSize=14,
-		fontName='DejaVuBold',
-		alignment=1
-	)))
+	
 	story.append(Spacer(1, 8*mm))
 
 	current_date = datetime.now().strftime("%d.%m.%Y")
@@ -191,12 +183,11 @@ def create_natal_pdf(chart, uid, user_first_name, bot_username):
 	story.append(PageBreak())
 
 	# Планеты
-	story.append(Paragraph("🪐 Планеты в знаках и домах", section_style))
+	story.append(Paragraph("◎─◯ Планеты в знаках и домах", section_style))
 	story.append(Spacer(1, 4*mm))
 
 	planets_by_house = _group_planets_by_house(pos, cusps)
-	
-	# Выводим планеты, сгруппированные по домам (1-12)
+
 	for house_num in range(1, 13):
 		planets_in_house = planets_by_house.get(house_num, [])
 		if planets_in_house:
@@ -206,7 +197,7 @@ def create_natal_pdf(chart, uid, user_first_name, bot_username):
 				parent=body_style,
 				fontName='DejaVuBold',
 				fontSize=12,
-				textColor=colors.HexColor('#2D5A8C')
+				textColor=colors.white,
 			)))
 			story.append(Spacer(1, 0.1*cm))
 			
@@ -284,7 +275,7 @@ def create_natal_pdf(chart, uid, user_first_name, bot_username):
 		story.append(PageBreak())
 
 	# Любовь, секс и партнёрство
-	story.append(Paragraph("💕 Любовь, секс и партнёрство", section_style))
+	story.append(Paragraph("♥ Любовь, секс и партнёрство", section_style))
 	story.append(Spacer(1, 4*mm))
 
 	sections = get_all_sections(chart)
@@ -295,7 +286,7 @@ def create_natal_pdf(chart, uid, user_first_name, bot_username):
 	story.append(PageBreak())
 
 	# Деньги и самореализация
-	story.append(Paragraph("💰 Деньги и самореализация", section_style))
+	story.append(Paragraph("$ Деньги и самореализация", section_style))
 	story.append(Spacer(1, 4*mm))
 	story.append(KeepTogether([
 		Paragraph(sections["money"], body_style)
@@ -304,7 +295,7 @@ def create_natal_pdf(chart, uid, user_first_name, bot_username):
 	story.append(PageBreak())
 
 	# Теневые стороны
-	story.append(Paragraph("⚫ Теневые стороны и блоки", section_style))
+	story.append(Paragraph("● Теневые стороны и блоки", section_style))
 	story.append(Spacer(1, 4*mm))
 	story.append(KeepTogether([
 		Paragraph(sections["shadow"], body_style)
@@ -313,7 +304,7 @@ def create_natal_pdf(chart, uid, user_first_name, bot_username):
 	story.append(PageBreak())
 
 	# Главная задача
-	story.append(Paragraph("🎯 Главная жизненная задача", section_style))
+	story.append(Paragraph("◎ Главная жизненная задача", section_style))
 	story.append(Spacer(1, 4*mm))
 	story.append(KeepTogether([
 		Paragraph(sections["task"], body_style)
@@ -329,13 +320,13 @@ def create_natal_pdf(chart, uid, user_first_name, bot_username):
 		"Помните: астрология — это инструмент для размышлений, а не руководство к действию.  <br/>"
 		"Все решения и ответственность — только ваши.<br/><br/>"
 		"С уважением,  <br/>"
-		 f"@{bot_username}"
+		 f"{bot_username}"
 	)
 	story.append(Paragraph(conclusion_text, ParagraphStyle(
 		'Conclusion',
 		parent=body_style,
 		fontSize=10,
-		textColor=colors.HexColor('#1E3A8A'),
+		textColor=colors.HexColor("#2B51BC"),
 		alignment=1,
 		leading=14
 	)))

@@ -2,13 +2,14 @@ import datetime
 import os
 import threading
 import time
+from time import time as now_time
 from admin import admin_only
 from dotenv import load_dotenv
 from pdf_generator import create_natal_pdf
 import telebot
 from telebot.types import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
 import telebot.apihelper as apihelper
-from states import is_paid, set_paid, set_state, get_state, get_data, user_states
+from states import get_active_user_count, get_paid_user_count, is_paid, set_paid, set_state, get_state, get_data, last_callback_time, CALLBACK_COOLDOWN
 from calculator import calculate_full_chart
 from texts import generate_free_interpretation
 from payments import send_full_chart_invoice
@@ -132,6 +133,22 @@ def handle_buy_full(call):
 	chat_id = call.message.chat.id
 	user_first_name = call.from_user.first_name or ""
 
+	now = now_time()
+
+	# Проверяем кулдаун
+	if uid in last_callback_time and now - last_callback_time[uid] < CALLBACK_COOLDOWN:
+		bot.answer_callback_query(
+			call.id,
+			text="Подождите 3–4 секунды перед повторным нажатием",
+			show_alert=False,
+			cache_time=1
+		)
+		return
+
+	last_callback_time[uid] = now
+
+	user_first_name = call.from_user.first_name or ""
+
 	if is_paid(uid):
 		bot.answer_callback_query(call.id, "Вы уже оплатили полный разбор", show_alert=True)
 		# Отправляем разбор если уже оплачено
@@ -156,8 +173,12 @@ def handle_buy_full(call):
 		return
 
 	# Отправляем инвойс
-	send_full_chart_invoice(bot, chat_id)
-	bot.answer_callback_query(call.id, "Открываем оплату...")
+	try:
+		send_full_chart_invoice(bot, chat_id)
+		bot.answer_callback_query(call.id, "Открываем оплату...")
+	except Exception as e:
+		bot.answer_callback_query(call.id, f"Ошибка: {str(e)}", show_alert=True)
+		print(f"Ошибка при send_invoice для {uid}: {e}")
 
 
 @bot.pre_checkout_query_handler(func=lambda query: True)
@@ -281,63 +302,70 @@ def successful_payment_handler(message):
 @bot.message_handler(commands=['admin', 'stats'])
 @admin_only
 def admin_stats(message):
-	uid = message.from_user.id
+	from datetime import datetime
+
 	text = f"Статистика на {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n"
-	
-	active_users = len([uid for uid in user_states if get_state(uid) != 'START'])
-	paid_users = sum(1 for uid in user_states if is_paid(uid))
-	
-	text += f"Активных сессий: {active_users}\n"
-	text += f"Оплативших полный разбор: {paid_users}\n"
-	
+
+	active = get_active_user_count()
+	paid = get_paid_user_count()
+
+	text += f"Активных сессий: {active}\n"
+	text += f"Оплативших полный разбор: {paid}\n"
+
 	bot.reply_to(message, text)
 
 
 @bot.message_handler(commands=['broadcast'])
 @admin_only
 def broadcast(message):
-	text = message.text.split(maxsplit=1)[1] if len(message.text.split()) > 1 else None
-	if not text:
+	if len(message.text.split()) <= 1:
 		bot.reply_to(message, "Напишите: /broadcast Ваш текст для рассылки")
 		return
-	
+
+	text = message.text.split(maxsplit=1)[1]
 	sent = 0
-	for uid in user_states:
+	failed = 0
+
+	bot.reply_to(message, "Рассылка запущена... Это может занять время.")
+
+	for uid in list(user_states.keys()):
 		try:
 			bot.send_message(uid, text)
 			sent += 1
-		except:
-			pass
-	
-	bot.reply_to(message, f"Рассылка завершена. Отправлено: {sent}")
+		except Exception as e:
+			failed += 1
+
+		time.sleep(0.35)
+
+	bot.reply_to(message, f"Рассылка завершена.\nОтправлено: {sent}\nНе удалось: {failed}")
 
 @bot.message_handler(commands=['info', 'информация', 'помощь', 'help'])
 def bot_info(message):
-    uid = message.from_user.id
-    text = (
-        "🌟 <b>Натальный чарт-бот</b> 🌟\n\n"
-        "Я помогаю рассчитать твою натальную карту и понять, как звёзды влияют на твою жизнь.\n\n"
-        "<b>Что умеет бот:</b>\n"
-        "• Бесплатно рассчитывает натальную карту по дате, времени и месту рождения\n"
-        "• Даёт краткую бесплатную интерпретацию (аспекты, планеты в домах, стихии)\n"
-        "• Предлагает купить <b>полный профессиональный разбор</b> в PDF (100 ★)\n"
-        "  → 8-10 страниц детального текста\n"
-        "  → Совместимость, прогрессии, синастрия (по запросу), рекомендации\n\n"
-        "<b>Как пользоваться:</b>\n"
-        "1. Нажми «Рассчитать натальную карту»\n"
-        "2. Введи дату → время → место рождения\n"
-        "3. Получи бесплатный обзор\n"
-        "4. Если захочешь глубже — купи полный разбор за 100 Telegram Stars\n\n"
-        "Все данные хранятся только до конца сессии или до /start\n\n"
-        "Приятного исследования себя! ✨"
-    )
-    
-    bot.send_message(
-        message.chat.id,
-        text,
-        parse_mode='HTML',
-        disable_web_page_preview=True
-    )
+	uid = message.from_user.id
+	text = (
+		"🌟 <b>Натальный чарт-бот</b> 🌟\n\n"
+		"Я помогаю рассчитать твою натальную карту и понять, как звёзды влияют на твою жизнь.\n\n"
+		"<b>Что умеет бот:</b>\n"
+		"• Бесплатно рассчитывает натальную карту по дате, времени и месту рождения\n"
+		"• Даёт краткую бесплатную интерпретацию (аспекты, планеты в домах, стихии)\n"
+		"• Предлагает купить <b>полный профессиональный разбор</b> в PDF (100 ★)\n"
+		"  → 8-10 страниц детального текста\n"
+		"  → Совместимость, прогрессии, синастрия (по запросу), рекомендации\n\n"
+		"<b>Как пользоваться:</b>\n"
+		"1. Нажми «Рассчитать натальную карту»\n"
+		"2. Введи дату → время → место рождения\n"
+		"3. Получи бесплатный обзор\n"
+		"4. Если захочешь глубже — купи полный разбор за 100 Telegram Stars\n\n"
+		"Все данные хранятся только до конца сессии или до /start\n\n"
+		"Приятного исследования себя! ✨"
+	)
+	
+	bot.send_message(
+		message.chat.id,
+		text,
+		parse_mode='HTML',
+		disable_web_page_preview=True
+	)
 
 
 @bot.message_handler(commands=['testpay'])

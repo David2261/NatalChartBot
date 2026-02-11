@@ -137,13 +137,7 @@ def _build_prompt(section: str, chart: Dict) -> str:
 
 
 async def generate_section(section: str, chart: Dict, session: aiohttp.ClientSession) -> str:
-	"""
-	Generate one section with a shared ClientSession.
-	
-	Note: socket timeouts count from last byte received, not request start.
-	With 360s sock_read, very long responses (300+ tokens in Russian) may timeout
-	between TCP packets. We add explicit total timeout to catch this.
-	"""
+	"""Генерирует текст для одного раздела с помощью локальной LLM."""
 	if section not in FALLBACK_TEXTS:
 		return FALLBACK_TEXTS["love"]
 	
@@ -198,14 +192,13 @@ async def generate_section(section: str, chart: Dict, session: aiohttp.ClientSes
 async def generate_all_sections(chart: Dict) -> Dict[str, str]:
 	sections = ["love", "money", "shadow", "task"]
 	results = {}
-	
+
 	async with aiohttp.ClientSession() as session:
 		for section in sections:
 			text = await generate_section(section, chart, session)
 			results[section] = text
-			# Small delay between requests to let server recover
 			await asyncio.sleep(1)
-	
+
 	return results
 
 

@@ -23,7 +23,7 @@ from texts import get_house
 MODEL_NAME = "qwen2.5-3b-instruct"
 LM_API_URL = "http://127.0.0.1:1234/v1/chat/completions"
 
-REQUEST_TIMEOUT = 360
+REQUEST_TIMEOUT = 1000
 TEMPERATURE = 0.3
 MAX_TOKENS = 300
 

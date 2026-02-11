@@ -40,8 +40,8 @@ NatalChartBot/
 ├── database.py           # Encrypted SQLite database logic
 ├── db/
 │   └── schema.sql        # Database schema
+│   └── data.sqlite       # SQLite database (generated)
 ├── assets/               # Templates and static resources
-├── data.sqlite           # SQLite database (generated)
 ├── .env                  # Environment variables
 └── requirements.txt
 ```
@@ -60,14 +60,8 @@ cd NatalChartBot
 ### 2. Create virtual environment
 
 ```bash
-python3.11 -m venv venv
+poetry install
 source venv/bin/activate
-```
-
-### 3. Install dependencies
-
-```bash
-pip install -r requirements.txt
 ```
 
 ---

@@ -18,7 +18,7 @@ load_dotenv()
 
 TOKEN = os.getenv("TOKEN")
 
-apihelper.API_TIMEOUT = 360
+apihelper.API_TIMEOUT = 1000
 apihelper.RETRY_ON_ERROR = True
 apihelper.RETRY_DELAY = 2
 apihelper.MAX_RETRIES = 5
@@ -227,7 +227,7 @@ def send_full_result(bot, chat_id, uid=None):
 	bot.send_message(
 		chat_id,
 		"⏳ Формирую ваш полный натальный разбор.\n"
-		"Это займет около 1–2 минут."
+		"Это займет около 5–10 минут."
 	)
 
 	threading.Thread(
@@ -368,12 +368,12 @@ def bot_info(message):
 	)
 
 
-@bot.message_handler(commands=['testpay'])
-def testpay(message):
-	uid = message.from_user.id
-	set_paid(uid, "test123")
-	bot.send_message(message.chat.id, "Тест: оплата прошла")
-	send_full_result(bot, message.chat.id, uid)
+# @bot.message_handler(commands=['testpay'])
+# def testpay(message):
+# 	uid = message.from_user.id
+# 	set_paid(uid, "test123")
+# 	bot.send_message(message.chat.id, "Тест: оплата прошла")
+# 	send_full_result(bot, message.chat.id, uid)
 
 
 if __name__ == "__main__":
